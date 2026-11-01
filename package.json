@@ -1,0 +1,26 @@
+{
+  "name": "@local/captcha-solver",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local captcha-solving plugin for the DeepSeek Harness agent: text, arithmetic, jigsaw slider, click-order and rotate captchas through one MCP tool surface.",
+  "homepage": "https://github.com/",
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "server/**",
+    "scripts/**",
+    "run.sh",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

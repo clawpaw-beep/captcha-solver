@@ -1,0 +1,6 @@
+{
+  "captcha-solver": {
+    "name": "Captcha Solver",
+    "description": "Solves text, arithmetic, jigsaw-slider, click-order and rotate captchas locally, and hands the answer back to the agent as a tool result."
+  }
+}

@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Captcha Lab · 本地验证码测试台</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 32px 60px;
+    font: 14px/1.5 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #f6f7f9; color: #16181d;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 22px; color: #5a616e; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+  .card {
+    background: #fff; border: 1px solid #e4e7ec; border-radius: 12px;
+    padding: 16px 16px 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .card h2 { font-size: 14px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 11px; font-weight: 500; color: #475467; background: #f2f4f7; border-radius: 999px; padding: 2px 8px; }
+  .hint { color: #667085; font-size: 12px; margin: 2px 0 10px; min-height: 18px; }
+  canvas { display: block; border-radius: 8px; border: 1px solid #e4e7ec; background: #fff; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  input[type=text] {
+    flex: 0 0 170px; height: 34px; padding: 0 10px; font: 500 15px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .06em; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff;
+  }
+  input[type=text]:focus { outline: 2px solid #84caff; outline-offset: 1px; }
+  button {
+    height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #d0d5dd;
+    background: #fff; color: #16181d; font-size: 13px; cursor: pointer;
+  }
+  button.primary { background: #1570ef; border-color: #1570ef; color: #fff; }
+  button:hover { filter: brightness(.97); }
+  .verdict { font-size: 13px; font-weight: 600; margin-left: 4px; }
+  .ok { color: #067647; }
+  .bad { color: #b42318; }
+  .slider-wrap { position: relative; width: 320px; height: 160px; user-select: none; }
+  .slider-wrap canvas { position: absolute; inset: 0; }
+  #slider-handle {
+    position: absolute; left: 0; top: 0; width: 44px; height: 160px;
+    border-radius: 8px 0 0 8px; background: rgba(21,112,239,.14);
+    border: 1px solid rgba(21,112,239,.5); cursor: grab;
+    display: flex; align-items: center; justify-content: center; color: #1570ef; font-weight: 600;
+  }
+  .scoreboard { margin-top: 26px; padding: 14px 16px; background: #fff; border: 1px solid #e4e7ec; border-radius: 12px; }
+  .scoreboard b { font-variant-numeric: tabular-nums; }
+  code { background: #f2f4f7; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Captcha Lab · 本地验证码测试台</h1>
+<p class="lead">五种验证码，答案由页面生成并保留真值；识别结果由外部求解器给出，填回输入框提交后页面判定对错。</p>
+
+<div class="grid">
+  <section class="card" id="card-text">
+    <h2>文字验证码 <span class="tag">text</span></h2>
+    <div class="hint" id="hint-text">5 位数字+大写字母</div>
+    <canvas role="img" aria-label="captcha text" id="cv-text" width="220" height="78"></canvas>
+    <div class="row">
+      <input id="in-text" type="text" autocomplete="off" spellcheck="false" placeholder="输入识别结果">
+      <button class="primary" data-submit="text">提交</button>
+      <button data-refresh="text">换一张</button>
+      <span class="verdict" id="v-text"></span>
+    </div>
+  </section>
+
+  <section class="card" id="card-arith">
+    <h2>算术验证码 <span class="tag">arithmetic</span></h2>
+    <div class="hint" id="hint-arith">回答算式结果</div>
+    <canvas role="img" aria-label="captcha arith" id="cv-arith" width="220" height="70"></canvas>
+    <div class="row">
+      <input id="in-arith" type="text" autocomplete="off" spellcheck="false" placeholder="填数字结果">
+      <button class="primary" data-submit="arith">提交</button>
+      <button data-refresh="arith">换一张</button>
+      <span class="verdict" id="v-arith"></span>
+    </div>
+  </section>
+
+  <section class="card" id="card-rotate">
+    <h2>旋转验证码 <span class="tag">rotate</span></h2>
+    <div class="hint" id="hint-rotate">4 位字母数字，整体倾斜</div>
+    <canvas role="img" aria-label="captcha rotate" id="cv-rotate" width="260" height="150"></canvas>
+    <div class="row">
+      <input id="in-rotate" type="text" autocomplete="off" spellcheck="false" placeholder="输入识别结果">
+      <button class="primary" data-submit="rotate">提交</button>
+      <button data-refresh="rotate">换一张</button>
+      <span class="verdict" id="v-rotate"></span>
+    </div>
+  </section>
+
+  <section class="card" id="card-click">
+    <h2>点选验证码 <span class="tag">click</span></h2>
+    <div class="hint" id="hint-click">按提示顺序依次点击</div>
+    <canvas role="img" aria-label="captcha click" id="cv-click" width="300" height="150"></canvas>
+    <div class="row">
+      <input id="in-click" type="text" autocomplete="off" spellcheck="false" placeholder="点击顺序（自动记录）" readonly>
+      <button class="primary" data-submit="click">提交</button>
+      <button data-refresh="click">换一张</button>
+      <span class="verdict" id="v-click"></span>
+    </div>
+  </section>
+
+  <section class="card" id="card-slider">
+    <h2>滑块验证码 <span class="tag">slider</span></h2>
+    <div class="hint" id="hint-slider">把缺口对齐（拖动左侧滑块）</div>
+    <div class="slider-wrap">
+      <canvas role="img" aria-label="captcha slider" id="cv-slider" width="320" height="160"></canvas>
+      <div id="slider-handle">⇢</div>
+    </div>
+    <div class="row">
+      <button class="primary" data-submit="slider">验证位置</button>
+      <button data-refresh="slider">换一张</button>
+      <span class="verdict" id="v-slider"></span>
+    </div>
+  </section>
+</div>
+
+<div class="scoreboard" id="scoreboard">本轮结果：<b id="ledger">—</b>　（<code>window.LAB.truth()</code> 可读真值）</div>
+
+<script>
+(() => {
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const FONTS = ['Arial', 'Verdana', 'Georgia', 'Courier New', 'Trebuchet MS', 'Times New Roman'];
+  const LAB = {
+    truth: {},
+    clicks: { click: [] },
+    results: {},
+    failed: [],
+  };
+  window.LAB = LAB;
+
+  const noise = (ctx, w, h, count = 90) => {
+    for (let i = 0; i < count; i++) {
+      const g = Math.floor(rnd(140, 255));
+      ctx.fillStyle = `rgb(${g},${g},${g})`;
+      ctx.fillRect(rnd(0, w), rnd(0, h), 1, 1);
+    }
+  };
+  const lines = (ctx, w, h, n = 2) => {
+    for (let i = 0; i < n; i++) {
+      const g = Math.floor(rnd(150, 215));
+      ctx.strokeStyle = `rgb(${g},${g},${g})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rnd(0, w), rnd(0, h));
+      ctx.bezierCurveTo(rnd(0, w), rnd(0, h), rnd(0, w), rnd(0, h), rnd(0, w), rnd(0, h));
+      ctx.stroke();
+    }
+  };
+
+  // ---- text -------------------------------------------------------------
+  function drawText() {
+    const cv = document.getElementById('cv-text');
+    const ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    noise(ctx, w, h, 120);
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let answer = '';
+    for (let i = 0; i < 5; i++) answer += pick(alphabet);
+    let x = rnd(8, 14);
+    for (const ch of answer) {
+      const size = Math.floor(rnd(30, 38));
+      ctx.save();
+      ctx.translate(x + size / 2, rnd(30, 44));
+      ctx.rotate(rnd(-0.28, 0.28));
+      ctx.font = `700 ${size}px ${pick(FONTS)}`;
+      ctx.fillStyle = `rgb(${Math.floor(rnd(0, 70))},${Math.floor(rnd(0, 70))},${Math.floor(rnd(0, 70))})`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
+      x += size + rnd(2, 7);
+    }
+    lines(ctx, w, h, 2);
+    LAB.truth.text = answer;
+    document.getElementById('hint-text').textContent = '5 位数字+大写字母';
+  }
+
+  // ---- arithmetic -------------------------------------------------------
+  function drawArith() {
+    const cv = document.getElementById('cv-arith');
+    const ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    noise(ctx, w, h, 110);
+    const a = Math.floor(rnd(1, 29)), b = Math.floor(rnd(1, 19));
+    const op = pick(['+', '-', '×']);
+    const expr = `${a}${op}${b}=?`;
+    const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+    ctx.font = `600 32px ${pick(FONTS)}`;
+    ctx.fillStyle = '#111';
+    ctx.textBaseline = 'middle';
+    let x = 14;
+    for (const ch of expr) {
+      ctx.fillText(ch, x, 36 + rnd(-3, 3));
+      x += 32;
+    }
+    lines(ctx, w, h, 1);
+    LAB.truth.arith = String(answer);
+    LAB.truth.arithExpr = `${a}${op}${b}`;
+    document.getElementById('hint-arith').textContent = `${LAB.truth.arithExpr} = ?`;
+  }
+
+  // ---- rotate -----------------------------------------------------------
+  function drawRotate() {
+    const cv = document.getElementById('cv-rotate');
+    const ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    ctx.fillStyle = '#fbfbfd'; ctx.fillRect(0, 0, w, h);
+    noise(ctx, w, h, 140);
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let answer = '';
+    for (let i = 0; i < 4; i++) answer += pick(alphabet);
+    const ang = rnd(-0.6, 0.6);
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(ang);
+    ctx.font = `700 40px ${pick(FONTS)}`;
+    ctx.fillStyle = '#1b1b1b';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(answer, 0, 0);
+    ctx.restore();
+    LAB.truth.rotate = answer;
+    LAB.truth.rotateAngleDeg = +(ang * 180 / Math.PI).toFixed(1);
+    document.getElementById('hint-rotate').textContent = `4 位字母数字（倾斜 ${LAB.truth.rotateAngleDeg}°）`;
+  }
+
+  // ---- click ------------------------------------------------------------
+  function drawClick() {
+    const cv = document.getElementById('cv-click');
+    const ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    noise(ctx, w, h, 160);
+    const pool = '天地人山水日月星云';
+    const chars = [...new Set(Array.from({ length: 8 }, () => pick(pool)))].slice(0, 4);
+    while (chars.length < 4) { const c = pick(pool); if (!chars.includes(c)) chars.push(c); }
+    const spots = [[50, 45], [200, 45], [50, 110], [200, 110]];
+    spots.forEach((s, i) => {
+      const x = s[0] + rnd(-16, 16), y = s[1] + rnd(-10, 10);
+      ctx.font = `700 42px "PingFang SC", "Hiragino Sans GB", sans-serif`;
+      ctx.fillStyle = `rgb(${Math.floor(rnd(0, 70))},${Math.floor(rnd(0, 70))},${Math.floor(rnd(0, 70))})`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(chars[i], x, y);
+      chars[i] = { ch: chars[i], x, y };
+    });
+    const order = [...chars].sort(() => Math.random() - 0.5);
+    LAB.truth.click = order.map((c) => ({ ch: c.ch, x: Math.round(c.x), y: Math.round(c.y) }));
+    LAB.clicks.click = [];
+    document.getElementById('in-click').value = '';
+    document.getElementById('hint-click').textContent =
+      '请依次点击：' + order.map((c) => c.ch).join(' ');
+  }
+
+  // ---- slider -----------------------------------------------------------
+  function drawSlider() {
+    const cv = document.getElementById('cv-slider');
+    const ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    ctx.fillStyle = `hsl(${Math.floor(rnd(0, 360))} 45% 55%)`;
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      ctx.fillStyle = `hsl(${Math.floor(rnd(0, 360))} 70% ${Math.floor(rnd(40, 75))}%)`;
+      ctx.beginPath();
+      ctx.ellipse(rnd(0, w), rnd(0, h), rnd(8, 44), rnd(8, 44), rnd(0, 3.14), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const pw = 58, py = Math.floor(rnd(30, 70));
+    const gapX = Math.floor(rnd(150, w - pw - 8));
+    // the gap is cut out of the picture
+    const g = ctx.getImageData(gapX, py, pw, pw);
+    ctx.fillStyle = 'rgba(228,228,232,1)';
+    ctx.fillRect(gapX, py, pw, pw);
+    // the piece is that cut-out, parked on the left
+    const piece = document.createElement('canvas');
+    piece.width = pw; piece.height = pw;
+    piece.getContext('2d').putImageData(g, 0, 0);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 6;
+    ctx.drawImage(piece, 0, py);
+    ctx.restore();
+    LAB.truth.slider = { gapX, py, pw };
+    document.getElementById('slider-handle').style.left = '0px';
+  }
+
+  // ---- helpers ----------------------------------------------------------
+  const drawers = { text: drawText, arith: drawArith, rotate: drawRotate, click: drawClick, slider: drawSlider };
+
+  function verdict(kind, ok, extra = '') {
+    const el = document.getElementById('v-' + kind);
+    el.className = 'verdict ' + (ok ? 'ok' : 'bad');
+    el.textContent = ok ? '✅ 正确' : '❌ 未通过';
+    if (extra) el.textContent += ' · ' + extra;
+    LAB.results[kind] = ok;
+    if (!ok) LAB.failed.push({ kind, truth: LAB.truth[kind] });
+    const done = Object.keys(LAB.results).length;
+    const right = Object.values(LAB.results).filter(Boolean).length;
+    document.getElementById('ledger').textContent = `${right}/${done} 通过`;
+  }
+  window.LAB.verdict = verdict;
+
+  document.querySelectorAll('[data-refresh]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const kind = b.dataset.refresh;
+      drawers[kind]();
+      delete LAB.results[kind];
+      document.getElementById('v-' + kind).textContent = '';
+      if (kind === 'click') { LAB.clicks.click = []; document.getElementById('in-click').value = ''; }
+    });
+  });
+
+  document.querySelectorAll('[data-submit]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const kind = b.dataset.submit;
+      if (kind === 'slider') {
+        const dx = parseFloat(document.getElementById('slider-handle').style.left || '0');
+        const { gapX } = LAB.truth.slider;
+        verdict('slider', Math.abs(dx - gapX) <= 6, `偏差 ${Math.round(Math.abs(dx - gapX))}px`);
+        return;
+      }
+      if (kind === 'click') {
+        const got = LAB.clicks.click;
+        const want = LAB.truth.click;
+        const ok = got.length === want.length && got.every((p, i) => Math.hypot(p.x - want[i].x, p.y - want[i].y) <= 14);
+        verdict('click', ok, ok ? '' : `需要 ${want.length} 点，已点 ${got.length}`);
+        return;
+      }
+      const input = document.getElementById('in-' + kind);
+      const got = (input.value || '').trim().toUpperCase();
+      const want = String(LAB.truth[kind]).toUpperCase();
+      verdict(kind, got === want, got === want ? '' : `真值 ${want}`);
+    });
+  });
+
+  // click capture on canvas
+  document.getElementById('cv-click').addEventListener('click', (ev) => {
+    const r = ev.target.getBoundingClientRect();
+    const p = { x: Math.round(ev.clientX - r.left), y: Math.round(ev.clientY - r.top) };
+    LAB.clicks.click.push(p);
+    document.getElementById('in-click').value = LAB.clicks.click.map((q) => `${q.x},${q.y}`).join(' | ');
+  });
+
+  // slider drag
+  (() => {
+    const handle = document.getElementById('slider-handle');
+    const canvas = document.getElementById('cv-slider');
+    let dragging = false, startX = 0, startLeft = 0;
+    const maxLeft = () => canvas.width - handle.offsetWidth;
+    handle.addEventListener('pointerdown', (e) => {
+      dragging = true; startX = e.clientX; startLeft = parseFloat(handle.style.left || '0');
+      handle.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      handle.style.left = Math.max(0, Math.min(maxLeft(), startLeft + dx)) + 'px';
+    });
+    window.addEventListener('pointerup', () => { dragging = false; });
+  })();
+
+  Object.values(drawers).forEach((fn) => fn());
+})();
+</script>
+</body>
+</html>

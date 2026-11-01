@@ -1,0 +1,11 @@
+{
+  "_note": "学信网 account.chsi.com.cn/passport/captcha.image —— 表达式由人工 6x 放大目视核对；chsi_7 不是算术题（字母验证码），标 ? 排除",
+  "chsi_1.jpg": {"expr": "10+3*3+8", "answer": "27"},
+  "chsi_2.jpg": {"expr": "7+9*4+7", "answer": "50"},
+  "chsi_3.jpg": {"expr": "5+7+9*0", "answer": "12"},
+  "chsi_4.jpg": {"expr": "5+0*4*3", "answer": "5"},
+  "chsi_5.jpg": {"expr": "2*4+3+7", "answer": "18"},
+  "chsi_6.jpg": {"expr": "10*3+4*6", "answer": "54"},
+  "chsi_7.jpg": "?",
+  "chsi_8.jpg": {"expr": "8*4*0+5", "answer": "5"}
+}

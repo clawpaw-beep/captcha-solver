@@ -1,0 +1,11 @@
+# venv / caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# generated artifacts: keep the small live evidence, drop the bulk
+server/out/*
+!server/out/live/
+!server/out/live/**

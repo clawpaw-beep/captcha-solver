@@ -1,0 +1,16 @@
+# captcha-solver bundle: registers the local MCP server as agent tools
+# (captcha_solve / captcha_slider / captcha_click / captcha_status / captcha_bench).
+# Paths are absolute because the DSH host loads plugins outside this folder.
+- insert:
+    - id: mcp-captcha
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: captcha
+        transport: stdio
+        command: '/Users/wuxu/Documents/deepseek-harness/default-workspace/.dsh-bundles/captcha-solver/.venv/bin/python'
+        args:
+          - '-m'
+          - 'captcha_solver.mcp_server'
+        cwd: '/Users/wuxu/Documents/deepseek-harness/default-workspace/.dsh-bundles/captcha-solver/server'
+        toolCallTimeoutMs: 180000
+        failOnStartupError: false
