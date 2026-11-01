@@ -23,7 +23,9 @@
 | 4 | 按 `humanize_check` 的规则发事件：`pointerover→move(3 段)→down→hold 78–96ms→up→click` | 每次点击图上出现红色编号 `1`、`2` |
 | 5 | 点 `Confirm` | 弹窗关闭 → 页面继续登录 → 服务端返回 **"We couldn't find an account with that email."** |
 
-最后这句就是证据：验证凭证被接受、登录请求真的走到了账号校验。第 1 题第一次失败
+最后这句就是证据：验证凭证被接受、登录请求真的走到了账号校验。
+
+![TikTok 第三题：两个绿色小写 t](pick3_4x.png)第 1 题第一次失败
 （`Unable to verify. Please try again.`），原因是坐标估错——点在了字母 `m` 和空白处，
 而不是两个黄色几何体；改成像素分割出的中心点后一次通过。
 
@@ -60,6 +62,8 @@
 | `0ed8…` 蓝底 GEE TEST 点阵 | 149 | 低（content NCC 0.21） | 六边形缺口左缘 ≈150 | 对 |
 | `61e4…` 机场安检插画 | 201 | 66.5 | 三角形缺口左缘 ≈200 | 对 |
 | `a089…` 粉色 GEE! TEST | 137 | 61.8 | 六边形缺口左缘 ≈133 | 偏 4px |
+
+![geeTest 缺口：TEST 中间那个深色六边形](gt/bg3_3x.png)
 
 拼图块是异形（六边形 / 三角形），`shape_ncc`（alpha 轮廓匹配）比内容 NCC 稳；内容 NCC
 在图案密集处会漂。缺口 y 由 geetest 自己藏在 `slice` 的 `background-position` 里，
@@ -159,7 +163,9 @@ run 4  gap 152 margin 15 drag_css 132.1  → "Verification Success"  "0.6 s. You
 真正决定成败的是输入来源。轨迹仍然是 `behavior.drag_track`（12~19 步、9~26ms 变速、
 带过冲回弹、`uniform_risk: false`）。
 
-成功截图：`out/live/geetest_after_*.png`（面板显示绿条 "0.6 s. You beat 99% of users"）。
+![GeeTest v4 通过："0.6 s. You beat 99% of users"](geetest_after_1793538278.png)
+
+更多截图：`out/live/geetest_after_*.png`。
 
 ### 复现
 
