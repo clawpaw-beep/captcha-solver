@@ -322,17 +322,23 @@ _ARITH_LOOSE = re.compile(r"(-?\d+)\s*([+\-xX*×÷/])\s*(-?\d+)")
 
 
 def eval_arithmetic(text: str) -> Optional[dict]:
-    """Turn `3+5=?` into `{'expr': '3+5', 'answer': '8'}`.
+    """Turn `3+5=?` into `{'expr': '3+5', 'answer': '8'}` — one operator at a time.
 
-    Strict whole-string match first, then a loose search — the strictness is
-    what makes the cross-route vote in `solve_arithmetic` work: three routes
-    only agree when they read the very same clean pair. Chained expressions
-    (`10+3*3+8`) are handled by :func:`eval_chain` instead, so adding
-    precedence support does not loosen the single-operator contract.
+    A whole-string match wins; a loose search is the fallback for OCR noise
+    around the pair. When the string carries **more than one operator** the loose
+    search would cut `10+3*3+8` down to `10+3`, so the result is kept but flagged
+    `ambiguous: True` — downstream routes discount it (see the cropped-string
+    route in `solve_arithmetic`) and :func:`eval_chain` supplies the
+    precedence-correct answer. Silently answering 13 with full confidence was
+    the bug the CI smoke test caught.
     """
+    from . import expression as E
+
     t = (text or "").replace(" ", "").replace("？", "?").replace("＝", "=")
     t = t.replace("乘", "x").replace("加", "+").replace("减", "-").replace("除以", "/")
-    m = _ARITH_RE.match(t) or _ARITH_LOOSE.search(t)
+    n_ops = len([c for c in t if c in E.OP_CANON])
+    strict = _ARITH_RE.match(t)
+    m = strict or _ARITH_LOOSE.search(t)
     if not m:
         return None
     a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
@@ -349,11 +355,11 @@ def eval_arithmetic(text: str) -> Optional[dict]:
             val = a // b if a % b == 0 else a / b
     except ZeroDivisionError:
         return None
-    return {
-        "expr": f"{a}{op}{b}",
-        "answer": str(val),
-        "operator": op,
-    }
+    out = {"expr": f"{a}{op}{b}", "answer": str(val), "operator": op}
+    if n_ops > 1:
+        out["ambiguous"] = True
+        out["operators_seen"] = n_ops
+    return out
 
 
 def eval_chain(text: str, min_operators: int = 2, max_operands: int = 6) -> Optional[dict]:

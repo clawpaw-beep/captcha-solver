@@ -642,7 +642,9 @@ def solve_arithmetic(img: Image.Image, charset: str = ARITH_CHARSET, aggressive:
     parsed = ocr.eval_arithmetic(read.get("text", ""))
     if parsed:
         residue = ocr.clean(read.get("text", ""), ARITH_CHARSET)
-        ambiguous = ocr.clean(parsed["expr"]) != residue
+        # a read with extra operators makes the single-operator extraction a
+        # guess even when the residue looks tidy, so discount it the same way
+        ambiguous = ocr.clean(parsed["expr"]) != residue or bool(parsed.get("ambiguous"))
         candidates.append(
             {
                 "kind": "arithmetic",

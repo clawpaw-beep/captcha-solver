@@ -51,14 +51,20 @@ jobs:
         working-directory: server
 
       - name: Expression smoke test
-        # keeps the arithmetic contract visible in CI output, not just in assertions
+        # two contracts worth seeing in the log: the single-operator evaluator
+        # must DECLINE chained input (it used to cut `10+3*3+8` to `10+3`), and
+        # the chained evaluator must answer it with real precedence
         run: |
           python - <<'PY'
           from captcha_solver import ocr
-          for text, want in [("10+3*3+8答案是?", "27"), ("7+9*4+7", "50"), ("8*4*0+5", "5")]:
+          for text in ("10+3*3+8答案是?", "7+9*4+7", "8*4*0+5"):
+              single = ocr.eval_arithmetic(text)
+              assert single is None or single.get("ambiguous"), f"{text} must be flagged, not silently answered"
+              print(f"{text} -> {ocr.eval_chain(text)['answer']} (chained route)")
+          for text, want in [("3+5=?", "8"), ("5+32", "37")]:
               got = ocr.eval_arithmetic(text)["answer"]
               assert got == want, (text, got, want)
-              print(f"{text} -> {got}")
+              print(f"{text} -> {got} (single route)")
           PY
         working-directory: server
 

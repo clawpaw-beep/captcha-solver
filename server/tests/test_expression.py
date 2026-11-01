@@ -58,6 +58,32 @@ class OcrBridgeTest(unittest.TestCase):
         # a trailing junk digit must still be read as b, not silently dropped
         self.assertEqual(ocr.eval_arithmetic("5+32")["answer"], "37")
 
+    def test_chained_input_is_flagged_ambiguous(self):
+        """Regression: the loose single-operator search cut `10+3*3+8` down to
+        `10+3` and answered 13 with full confidence. It may still extract the
+        pair — the cropped-string route needs that for cross-route voting — but
+        it has to say out loud that the input was longer."""
+        for text in ("10+3*3+8答案是?", "7+9*4+7", "8*4*0+5", "5+7+9*0", "5+3-2"):
+            with self.subTest(text=text):
+                got = ocr.eval_arithmetic(text)
+                self.assertIsNotNone(got, "keep the pair so the vote can use it")
+                self.assertTrue(got.get("ambiguous"), "must be flagged, never silently used")
+                self.assertGreater(got.get("operators_seen", 0), 1)
+
+    def test_unambiguous_reads_are_not_flagged(self):
+        for text in ("3+5=?", "5+32", "12/4"):
+            with self.subTest(text=text):
+                self.assertFalse(ocr.eval_arithmetic(text).get("ambiguous"))
+
+    def test_chained_route_answers_what_the_single_route_declines(self):
+        self.assertEqual(ocr.eval_chain("10+3*3+8答案是?")["answer"], "27")
+        self.assertEqual(ocr.eval_chain("8*4*0+5")["answer"], "5")
+
+    def test_noise_around_a_single_pair_still_parses(self):
+        # the loose fallback exists for OCR junk around `a op b` — keep it working
+        self.assertEqual(ocr.eval_arithmetic("s3+5")["answer"], "8")
+        self.assertEqual(ocr.eval_arithmetic("5+32")["answer"], "37")
+
     def test_eval_chain_needs_two_operators(self):
         self.assertIsNone(ocr.eval_chain("3+5=?"))
         self.assertEqual(ocr.eval_chain("10+3*3+8")["answer"], "27")
