@@ -180,3 +180,38 @@ for i in 1 2 3; do PYTHONPATH=. ../.venv/bin/python -m tools.live_slider; done
 ```
 
 注意：headless 模式会被 gt4 直接拒绝，脚本默认带窗口。
+
+---
+
+## 4. 「获取验证码」按钮触发点实测（同一页面，真实业务按钮）
+
+不是点验证码组件本身，而是点页面上真正会让业务发码的那个按钮：GeeTest 官网
+`Adaptive CAPTCHA Demo` 底部的预约表单里有一个 **「获取验证码」**。流程：
+
+```
+切到 Slide CAPTCHA 模式
+→ 点「获取验证码」        （真实业务按钮，触发风控）
+→ 未填手机号，前端拦截 "请核对您的手机号"，但风控组件已被唤起
+→ 点组件上的 "Click to verify"
+→ 弹出滑块（tips: Verifying）
+→ 抓 geetest_bg / geetest_slice_bg 的 PNG
+→ solve: gap=114  margin=10  drag=104.6css  conf=70.1
+→ CDP 真实拖动 13 步 / 193ms
+→ "Verification Success"  "0.5 s. You beat 99% of users"
+```
+
+![获取验证码触发点通过](getcode_after_1793540534.png)
+
+### 两个值得记下来的行为差异
+
+**① 真实点击往往连滑块都不给。** 同一条链路在「No CAPTCHA」默认模式下点过一次：
+`Click to verify` 之后直接是 `Verification Success`，根本没有滑块面板——gt4 按风险
+决定要不要出题。只有切到 `Slide CAPTCHA` 模式（演示台强制出题）才拿到选择题。
+
+**② JS 合成事件现在连面板都不展开。** 在 MCP 那个浏览器（`--remote-debugging-pipe`，
+只能从页面里 `dispatchEvent`）对同一个 `Click to verify` 连点两次，`tips` 始终停在
+`Click to verify`，`geetest_btn` / `geetest_bg` 一直是 null。上一轮它至少还给出了面板
+只是拖动被拒，这一轮连题都不发——同一个检测面，越来越严。
+
+结论没变：**识别不是瓶颈，输入来源才是**。同一套 slider 参数和 `behavior`
+轨迹，换 `Input.dispatchMouseEvent` 就 6/7 → 7/7。
