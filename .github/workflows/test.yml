@@ -1,0 +1,74 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unittest:
+    # macOS is required, not preferred: the symbol/template tests load real
+    # system fonts from /System/Library/Fonts/Supplemental, and the glyph-bank
+    # logic is calibrated against those files. On Linux the same tests either
+    # skip or measure something else.
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime deps
+        # the neural engine (ddddocr + onnxruntime) is optional by design: the
+        # suite must pass on the tesseract + template path alone, which is what
+        # a fresh clone gets after scripts/setup.sh without the extra wheels
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pillow websocket-client
+
+      - name: Install tesseract (optional engine)
+        run: brew install tesseract || echo "tesseract install skipped"
+
+      - name: Report available engines
+        run: |
+          python - <<'PY'
+          from captcha_solver import engine, ocr
+          print("tesseract:", ocr.TESS_BIN)
+          print("neural engine:", engine.available())
+          PY
+        working-directory: server
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -t . -v
+        working-directory: server
+
+      - name: Expression smoke test
+        # keeps the arithmetic contract visible in CI output, not just in assertions
+        run: |
+          python - <<'PY'
+          from captcha_solver import ocr
+          for text, want in [("10+3*3+8答案是?", "27"), ("7+9*4+7", "50"), ("8*4*0+5", "5")]:
+              got = ocr.eval_arithmetic(text)["answer"]
+              assert got == want, (text, got, want)
+              print(f"{text} -> {got}")
+          PY
+        working-directory: server
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Byte-compile everything
+        # cheap syntax/indentation gate; no third-party linter dependency
+        run: python -m compileall -q server/captcha_solver server/tools server/bench

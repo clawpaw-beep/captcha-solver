@@ -1,5 +1,9 @@
 # captcha-solver — 给 agent 用的本地验证码插件
 
+[![tests](https://github.com/clawpaw-beep/captcha-solver/actions/workflows/test.yml/badge.svg)](https://github.com/clawpaw-beep/captcha-solver/actions/workflows/test.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.12%2B-3776ab.svg)](https://www.python.org/)
+
 把验证码识别做成 agent 可以直接调用的工具：文字、算术、滑块、点选、旋转五类，
 本地推理，不外传图片；识别不了的再按需上报远端服务。
 
@@ -527,3 +531,11 @@ agent 侧的典型闭环（配合浏览器 MCP 或 Playwright）：
 2. 滑块：截背景图 + 缺口图 → `captcha_slider` → 按 `drag_distance` 做人性化拖动
    （分 20~40 步、先快后慢、末端 3px 回弹），不要瞬移。
 3. 失败就换一张：`confidence < 55` 或服务端拒绝时点刷新，不要连续重试同一张图。
+
+## License
+
+MIT —— 见 [LICENSE](LICENSE)。copyright (c) 2026 clawpaw-beep。
+
+仓库里 `server/out/live/` 下的验证码样本是各站点公开发给匿名会话的挑战图（不含个人数据），
+仅作回归 fixture 保留；`bench/lab/real_samples/` 同理。第三方字体、tesseract、ddddocr
+分别遵循它们自己的许可，本项目只在使用层面依赖它们。
