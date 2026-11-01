@@ -71,3 +71,34 @@ class PieceOriginTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RestingSlotTest(unittest.TestCase):
+    """Aliyun PUZZLE paints a light copy of the piece at its resting place on the
+    left edge. Without a guard the matcher locks onto that slot and reports
+    gap ~= 0 — then the slider "drags 0px" and the challenge silently resets.
+
+    Fixtures are the real challenge captured from business.uniagency.net on
+    2026-11-01; the gap is at x≈215 and the resting slot at x≈0.
+    """
+
+    ALIYUN_BG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "live", "uniA_bg.png")
+    ALIYUN_PIECE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "live", "uniA_piece.png")
+
+    @unittest.skipUnless(os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "live", "uniA_bg.png")) and os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "live", "uniA_piece.png")), "aliyun fixture missing")
+    def test_gap_is_not_the_resting_slot(self):
+        bg = Image.open(self.ALIYUN_BG)
+        piece = Image.open(self.ALIYUN_PIECE)
+        res = slider.solve_slider(background=bg, piece=piece)
+        self.assertGreater(
+            res["offset"], 150,
+            f"solver locked onto the resting slot at x={res['offset']}",
+        )
+        self.assertGreater(res["drag_distance"], 140)
+
+    @unittest.skipUnless(os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "live", "gt", "bg3.png")), "geetest fixture missing")
+    def test_geetest_scene_unaffected(self):
+        bg = Image.open(os.path.join(FIX, "bg3.png"))
+        piece = Image.open(os.path.join(FIX, "slice3.png"))
+        res = slider.solve_slider(background=bg, piece=piece)
+        self.assertGreater(res["offset"], 100, "resting-slot guard must not break GeeTest reads")

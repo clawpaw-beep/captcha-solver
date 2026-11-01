@@ -215,3 +215,73 @@ for i in 1 2 3; do PYTHONPATH=. ../.venv/bin/python -m tools.live_slider; done
 
 结论没变：**识别不是瓶颈，输入来源才是**。同一套 slider 参数和 `behavior`
 轨迹，换 `Input.dispatchMouseEvent` 就 6/7 → 7/7。
+
+---
+
+## 5. 钛动 UniAgency（business.uniagency.net）真实账号实测
+
+用真实账号（手机号 173****9034）登录，测阿里云验证码 PUZZLE 版。**登录表单这一步通过了，
+滑块这一步没通过**——但这次拿到了决定性证据：求解是 100% 正确的，卡在别处。
+
+### 走到了哪一步
+
+| 步骤 | 结果 |
+| --- | --- |
+| 打开 `/login`，CDP 真实输入手机号 + 密码 → 点登录 | ✅ **通过**，页面进入「双重认证 / 手机验证」 |
+| 点「获取验证码」 | ✅ 稳定触发阿里云滑块（`#aliyunCaptcha-img` 296×200 + `#aliyunCaptcha-puzzle` 52×200 RGBA） |
+| 抓图求解 | ✅ 修掉一个 bug 后 gap 稳定给到 205~247，conf 60~100 |
+| CDP 真实拖动 | ✅ 事件全部被接受：`pointerdown/mousedown` 的 `isTrusted` 都是 **true**，把手跟随到 `left=205px/235px/246px` |
+| 松手后 | ❌ **静默换题**（不提示「验证失败」，直接刷新成新图、把手归零） |
+
+### 决定性证据：求解是对的
+
+把拼图块贴到求解出的 `gap=215` 位置上，缺口被填满、图案连续、边界消失：
+
+![gap=215 完美贴合](uniA_fit_0.png)
+
+所以 **不是识别错了，也不是拖动没生效**。
+
+### 修掉的 bug：阿里云的「休息位」
+
+阿里云会把拼图块的浅色剪影**画在图片左边缘**（拼图块还没拖动时停的位置）。原来的
+`shape_offset` 找"比周围更亮的低饱和区域"，于是锁到了这个休息位，`gap` 报成 **2**，
+拖 0px 必然失败。修复：匹配前把背景左侧 `min(piece.width, 25% 图宽)` 清空。
+
+```
+修复前  gap=2   → drag=0     （锁在休息位）
+修复后  gap=247 → drag=245   （真实的缺口）
+GeeTest 回归：bg3 仍是 gap=137 / drag=124，未受影响
+```
+
+### 事件链路是干净的（诊断输出）
+
+在页面注入捕获器后，用 `Input.dispatchMouseEvent` 拖 60px：
+
+```
+pointermove trusted=True target=aliyunCaptcha-sliding-slider x=510 y=486
+pointerdown trusted=True target=aliyunCaptcha-sliding-slider x=510 y=486
+mousedown   trusted=True target=aliyunCaptcha-sliding-slider x=510 y=486
+…
+拖动后: {"left": "60px", "text": "验证失败，请重试"}
+```
+
+把手**跟手移动了**，阿里云也给了明确失败提示。所以 CDP 输入这一层没有问题。
+
+### 为什么还是不过
+
+位置对、事件可信、把手到位，剩下的解释只剩**行为特征判定**：
+
+* 我们发的 `pointermove` 缺少真实鼠标的 `pressure` / `tiltX` / `tiltY` / `twist` 等属性；
+* `event.timeStamp` 间隔完全由我们的 sleep 决定，分布过于规整；
+* 拖动前在把手上的悬停只有 ~45ms，真人通常 100~300ms；
+* 试用过 `behavior.drag_track(steps=55, duration_ms=850)`（CV 0.245、`uniform_risk: false`）
+  仍然静默换题。
+
+阿里云对企业登录场景的风控明显比 GeeTest v4 那个 demo 严：**它连"验证失败"都不告诉你，
+直接换题**，这本身就是为了不给自动化任何反馈信号。
+
+### 下一步
+
+1. 在同一个 profile 里**用真人手拖一次**做对照：若真人过、脚本不过，就锁定是输入特征而非环境；
+2. 补齐 `pointer` 事件的 `force/tiltX/tiltY/twister`，并让悬停时长随机化到 100~300ms；
+3. 试 `Input.dispatchTouchEvent`（移动端 UA 下阿里云走 touch 分支，判定模型可能不同）。

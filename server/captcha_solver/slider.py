@@ -213,7 +213,7 @@ def _match_2d(bg_edges: np.ndarray, piece_gray: np.ndarray, scales: Sequence[flo
     return best[0], best[1], best[2], best[3], best[4], trail[:8]
 
 
-def shape_offset(background: Image.Image, piece: Image.Image) -> Optional[dict]:
+def shape_offset(background: Image.Image, piece: Image.Image, exclude_left: int = 0) -> Optional[dict]:
     """Align the piece's *outline* with the lightened cut-out in the picture.
 
     Vendors like Aliyun render the gap as a semi-transparent light patch of the
@@ -241,6 +241,11 @@ def shape_offset(background: Image.Image, piece: Image.Image) -> Optional[dict]:
         sat = np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0)
         base = I.box_blur(gray, 61)
         light = ((gray > base + 8) & (sat < 0.35)).astype(np.float32)
+        # Aliyun PUZZLE keeps a light copy of the piece at its resting place on
+        # the left edge; without this guard the matcher locks onto its own
+        # starting slot and reports gap ~= 0.
+        if exclude_left > 2:
+            light[:, : int(exclude_left)] = 0.0
         x, y, score, _ = I.match_template_2d(light, crop.astype(np.float32))
         # where the silhouette sits *inside* the piece image: vendors pad the
         # piece with transparent margin, so a gap-aligned x is not the same as
@@ -288,7 +293,14 @@ def solve_slider(
         else:
             c = 1.0 * scale_hint
             scales = [c * k for k in (0.8, 0.9, 1.0, 1.1, 1.2)]
-        x, y, score, w, h, trail = _match_2d(I.edge_map(I.to_gray(bg_img)), piece_gray, scales)
+        _bg_edges = I.edge_map(I.to_gray(bg_img))
+        # the resting-slot guard is a fraction of the piece's own width, not the
+        # transparent margin: Aliyun's piece is nearly full-width, so a 2px
+        # margin would guard nothing
+        rest_guard = min(piece_gray.shape[1], int(0.25 * _bg_edges.shape[1]))
+        if rest_guard > 4:
+            _bg_edges[:, :rest_guard] = 0.0
+        x, y, score, w, h, trail = _match_2d(_bg_edges, piece_gray, scales)
         evidence.append({"source": "edge_ncc_2d", "candidates": trail})
 
         # optional neural cross-check
@@ -300,7 +312,7 @@ def solve_slider(
             got = None
         # silhouette alignment: wins when the picture is textured (a trunk, a
         # window frame) and content NCC has to guess
-        shape = shape_offset(bg_img, piece)
+        shape = shape_offset(bg_img, piece, exclude_left=locals().get('rest_guard', 0))
         if shape:
             evidence.append({"source": "shape_ncc", **{k: v for k, v in shape.items() if k != "mask"}})
             if shape["score"] > max(score, 0.0) + 0.05:
