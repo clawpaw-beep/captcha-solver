@@ -106,6 +106,20 @@ class OSMouse:
         self._post(Quartz.kCGEventLeftMouseUp, (x, y))
         self._down = False
 
+    # ------------------------------------------------------------- keyboard
+    def type_text(self, text: str, gap_ms: float = 45.0, rng=None) -> None:
+        """Type through real key events (unicode string, layout independent)."""
+        import random as _random
+
+        rng = rng or _random.Random(len(text))
+        for ch in text:
+            for down in (True, False):
+                ev = Quartz.CGEventCreateKeyboardEvent(None, 0, down)
+                Quartz.CGEventKeyboardSetUnicodeString(ev, len(ch), ch)
+                Quartz.CGEventPost(self.tap, ev)
+            # humans don't type at a metronome
+            time.sleep(max(0.012, (gap_ms + rng.uniform(-18, 26)) / 1000.0))
+
     def click(self, x: float, y: float, hold_ms: float = 80.0) -> None:
         self.move(x, y)
         time.sleep(0.04)
