@@ -117,20 +117,26 @@ class CDP:
 
     # ------------------------------------------------------------------- input
     def mouse(self, kind: str, x: float, y: float, button: str = "left", buttons: int = 0,
-              click_count: int = 0, modifiers: int = 0) -> None:
-        self.send(
-            "Input.dispatchMouseEvent",
-            {
-                "type": kind,
-                "x": round(float(x), 2),
-                "y": round(float(y), 2),
-                "button": button,
-                "buttons": buttons,
-                "clickCount": click_count,
-                "modifiers": modifiers,
-                "pointerType": "mouse",
-            },
-        )
+              click_count: int = 0, modifiers: int = 0, force: float = 0.0,
+              tilt_x: int = 0, tilt_y: int = 0, twist: int = 0) -> None:
+        payload = {
+            "type": kind,
+            "x": round(float(x), 2),
+            "y": round(float(y), 2),
+            "button": button,
+            "buttons": buttons,
+            "clickCount": click_count,
+            "modifiers": modifiers,
+            "pointerType": "mouse",
+            # a real mouse reports pressure 0 hover / 0.5 pressed, and zero tilt
+            # and twist; vendors score these fields, so keep them physical
+            "force": max(0.0, min(1.0, float(force))),
+            "tangentialPressure": 0.0,
+            "tiltX": int(tilt_x),
+            "tiltY": int(tilt_y),
+            "twist": int(twist),
+        }
+        self.send("Input.dispatchMouseEvent", payload)
 
     def click(self, x: float, y: float, hold_ms: float = 80.0) -> None:
         self.mouse("mouseMoved", x, y, buttons=0)
@@ -139,35 +145,61 @@ class CDP:
         time.sleep(hold_ms / 1000.0)
         self.mouse("mouseReleased", x, y, button="left", buttons=0, click_count=1)
 
-    def drag(self, x0: float, y0: float, track: dict, settle_ms: float = 120.0) -> dict:
-        """Play a `behavior.drag_track` result through the real input pipeline."""
+    def drag(self, x0: float, y0: float, track: dict, settle_ms: float = 120.0,
+             hover_ms: Optional[float] = None) -> dict:
+        """Play a `behavior.drag_track` result through the real input pipeline.
+
+        Beyond coordinates this keeps the gesture physically plausible: a real
+        approach path before the press, a hover of 120-260ms on the handle (real
+        people settle before they pull), pressure 0.5 while held and 0 when
+        released, and one or two micro-pauses mid-drag. Aliyun in particular
+        resets the challenge silently when these are missing.
+        """
+        import random
+
         pts = track.get("points") or []
         durations = track.get("durations_ms") or []
         if not pts:
             raise ValueError("track has no points")
-        # approach the handle like a hand would, then press
-        self.mouse("mouseMoved", x0 - 7, y0 + 4, buttons=0)
-        time.sleep(0.035)
-        self.mouse("mouseMoved", x0, y0, buttons=0)
-        time.sleep(0.045)
-        self.mouse("mousePressed", x0, y0, button="left", buttons=1, click_count=1)
-        time.sleep(0.06)
-        last = (x0, y0)
+        rng = random.Random(track.get("distance", 0) or 0)
+
         def _xy(p):
             if isinstance(p, dict):
                 return float(p.get("x", 0.0)), float(p.get("y", 0.0))
             return float(p[0]), float(p[1])
 
+        # 1) approach: a couple of moves before landing on the handle
+        for dx, dy, dt in ((-17, 11, 42), (-9, 6, 31), (-4, 2, 26)):
+            self.mouse("mouseMoved", x0 + dx, y0 + dy, buttons=0)
+            time.sleep(dt / 1000.0)
+        self.mouse("mouseMoved", x0, y0, buttons=0)
+
+        # 2) hover on the handle before pressing
+        hover = hover_ms if hover_ms is not None else rng.uniform(120, 260)
+        time.sleep(hover / 1000.0)
+
+        # 3) press
+        self.mouse("mousePressed", x0, y0, button="left", buttons=1, click_count=1, force=0.5)
+        time.sleep(rng.uniform(0.055, 0.095))
+
+        pause_at = {max(2, len(pts) // 3), max(3, (2 * len(pts)) // 3)}
+        last = (x0, y0)
         for i in range(1, len(pts)):
             dx, dy = _xy(pts[i])
             last = (x0 + dx, y0 + dy)
-            self.mouse("mouseMoved", last[0], last[1], button="left", buttons=1)
+            self.mouse("mouseMoved", last[0], last[1], button="left", buttons=1,
+                       force=0.5 + rng.uniform(-0.03, 0.03))
             dt = durations[i] if i < len(durations) else 14
             time.sleep(max(0.004, dt / 1000.0))
+            if i in pause_at and rng.random() < 0.75:
+                time.sleep(rng.uniform(0.020, 0.055))  # natural micro-hesitation
+
+        # 4) release where the hand actually stopped
         time.sleep(settle_ms / 1000.0)
-        self.mouse("mouseReleased", last[0], last[1], button="left", buttons=0, click_count=1)
+        self.mouse("mouseReleased", last[0], last[1], button="left", buttons=0, click_count=1, force=0.0)
         return {"from": [round(x0, 2), round(y0, 2)], "to": [round(last[0], 2), round(last[1], 2)],
-                "steps": len(pts), "total_ms": track.get("total_ms")}
+                "steps": len(pts), "total_ms": track.get("total_ms"),
+                "hover_ms": round(hover, 1), "pauses": sorted(pause_at)}
 
     # ----------------------------------------------------------------- screens
     def screenshot(self, path: str) -> str:
